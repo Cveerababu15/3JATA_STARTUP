@@ -2,6 +2,14 @@
 
 ## AI-Powered Natural Food E-Commerce Platform
 
+<p align="center">
+  <img 
+    src="frontend/src/assets/3JATA.jpeg" 
+    alt="Organic Powder Platform"
+    width="900"
+  />
+</p>
+
 Organic Powder is a full-stack digital commerce platform designed for selling fruit and vegetable powders online.
 
 The platform combines a customer-facing e-commerce experience with an operations platform for managing products, inventory, orders, fulfillment, payments, customer support, marketing, content, analytics, and AI-powered product discovery.
