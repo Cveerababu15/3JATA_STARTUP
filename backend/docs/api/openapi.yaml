@@ -1,0 +1,639 @@
+openapi: 3.0.3
+info:
+  title: 3JATA Organic Powder Backend API (Backend Foundation)
+  version: 1.0.0
+  description: >
+    REST API for 3JATA organic fruit, vegetable, and herbal powders.
+    Uses HttpOnly session cookies (`3jata_sid`) and double-submit `X-CSRF-Token` headers for authenticated writes.
+    Monetary values use integer paise (`pricePaise`, `mrpPaise`, `INR`).
+servers:
+  - url: http://localhost:5000/api
+    description: Local development API base URL
+tags:
+  - name: Health
+  - name: Auth
+  - name: Admin
+  - name: Categories
+  - name: Products
+  - name: Variants
+  - name: Inventory
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: 3jata_sid
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+  schemas:
+    SuccessEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          nullable: true
+    ErrorEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness & database state check
+      responses:
+        "200":
+          description: Server health summary
+  /health/ready:
+    get:
+      tags: [Health]
+      summary: Readiness probe requiring connected MongoDB
+      responses:
+        "200":
+          description: Database connected
+        "503":
+          description: Database not connected
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new customer account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        "201": { description: Customer registered; verification email sent }
+        "400": { description: Validation failed or privileged fields supplied }
+        "409": { description: Email already exists }
+        "429": { description: Rate limit exceeded }
+  /auth/verify-email:
+    post:
+      tags: [Auth]
+      summary: Verify email using single-use token from email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        "200": { description: Email verified }
+        "400": { description: Invalid or expired token }
+  /auth/resend-verification:
+    post:
+      tags: [Auth]
+      summary: Resend email verification link (anti-enumeration)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "200": { description: Generic confirmation message }
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in and create HttpOnly cookie session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        "200": { description: Authenticated; sets 3jata_sid & 3jata_csrf cookies and returns csrfToken }
+        "401": { description: Invalid credentials }
+        "403": { description: Unverified email or suspended account }
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request password reset link (anti-enumeration)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "200": { description: Generic confirmation message }
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset password with single-use token and revoke all active sessions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token: { type: string }
+                newPassword: { type: string }
+      responses:
+        "200": { description: Password reset successful }
+        "400": { description: Invalid/expired token or weak password }
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current authenticated user
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200": { description: Current user profile and permissions }
+        "401": { description: Missing/expired/revoked session }
+  /auth/csrf-token:
+    get:
+      tags: [Auth]
+      summary: Fetch CSRF token for current session
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200": { description: Returns csrfToken }
+        "401": { description: Unauthenticated }
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke current session and clear cookies
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      responses:
+        "200": { description: Logged out }
+        "401": { description: Unauthenticated }
+        "403": { description: Missing or invalid CSRF token }
+  /auth/change-password:
+    patch:
+      tags: [Auth]
+      summary: Change password and revoke all active sessions
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string }
+                newPassword: { type: string }
+      responses:
+        "200": { description: Password changed; cookies cleared }
+        "401": { description: Wrong current password or unauthenticated }
+        "403": { description: Invalid CSRF token }
+
+  /admin/roles:
+    get:
+      tags: [Admin]
+      summary: List active roles and their permissions (roles.read)
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200": { description: Roles list }
+        "403": { description: Insufficient permission }
+  /admin/permissions:
+    get:
+      tags: [Admin]
+      summary: List all defined system permissions (roles.read)
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200": { description: Permissions list }
+  /admin/staff:
+    get:
+      tags: [Admin]
+      summary: List staff accounts (staff.read)
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [active, suspended] } }
+        - { name: search, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: Paginated staff accounts }
+    post:
+      tags: [Admin]
+      summary: Provision a new staff account (staff.create)
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                password: { type: string }
+                roleSlug: { type: string }
+                roleId: { type: string }
+      responses:
+        "201": { description: Staff account created }
+        "400": { description: Validation error or non-staff role }
+        "403": { description: Forbidden }
+        "409": { description: Email exists }
+  /admin/staff/{id}:
+    get:
+      tags: [Admin]
+      summary: Get staff account by ID (staff.read)
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Staff details }
+        "404": { description: Staff not found }
+    patch:
+      tags: [Admin]
+      summary: Update staff profile fields (staff.update)
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+      responses:
+        "200": { description: Staff updated }
+  /admin/staff/{id}/role:
+    patch:
+      tags: [Admin]
+      summary: Reassign staff role and revoke active sessions (roles.manage)
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roleSlug: { type: string }
+                roleId: { type: string }
+      responses:
+        "200": { description: Role reassigned }
+        "400": { description: Invalid role or last active owner guard }
+  /admin/staff/{id}/status:
+    patch:
+      tags: [Admin]
+      summary: Suspend or reactivate staff account (staff.update)
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [active, suspended] }
+                reason: { type: string }
+      responses:
+        "200": { description: Status updated }
+        "400": { description: Self-suspension or last active owner guard }
+  /admin/audit-logs:
+    get:
+      tags: [Admin]
+      summary: List audit trail entries (audit_logs.read)
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: action, in: query, schema: { type: string } }
+        - { name: resourceType, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: Paginated audit logs }
+
+  /categories:
+    get:
+      tags: [Categories]
+      summary: Public paginated active categories
+      parameters:
+        - { name: parent, in: query, schema: { type: string } }
+        - { name: search, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: Active categories }
+    post:
+      tags: [Categories]
+      summary: Create category or subcategory (categories.create)
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                slug: { type: string }
+                description: { type: string }
+                parent: { type: string, nullable: true }
+                displayOrder: { type: integer }
+                isActive: { type: boolean }
+      responses:
+        "201": { description: Category created }
+        "409": { description: Duplicate slug }
+  /categories/manage:
+    get:
+      tags: [Categories]
+      summary: List all categories including inactive/archived (categories.read)
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200": { description: Admin categories list }
+  /categories/{slug}:
+    get:
+      tags: [Categories]
+      summary: Get active category and active subcategories by slug
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Category details }
+        "404": { description: Not found }
+  /categories/{id}:
+    patch:
+      tags: [Categories]
+      summary: Update category with cycle prevention (categories.update)
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Updated }
+        "400": { description: Hierarchy cycle or invalid input }
+    delete:
+      tags: [Categories]
+      summary: Archive category non-destructively (categories.delete)
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Archived }
+        "400": { description: Has active children or products }
+
+  /products:
+    get:
+      tags: [Products]
+      summary: Public product search, filter, sort, and pagination (active only)
+      parameters:
+        - { name: search, in: query, schema: { type: string } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: tag, in: query, schema: { type: string } }
+        - { name: featured, in: query, schema: { type: boolean } }
+        - { name: bestseller, in: query, schema: { type: boolean } }
+        - { name: minPricePaise, in: query, schema: { type: integer } }
+        - { name: maxPricePaise, in: query, schema: { type: integer } }
+        - { name: weight, in: query, schema: { type: string } }
+        - { name: inStock, in: query, schema: { type: boolean } }
+        - { name: sort, in: query, schema: { type: string, enum: [newest, oldest, name_asc, name_desc, rating_desc, price_asc, price_desc] } }
+        - { name: page, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: Active products with variants and stock availability }
+    post:
+      tags: [Products]
+      summary: Create product and optional initial variants (products.create)
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      responses:
+        "201": { description: Product created }
+        "409": { description: Duplicate slug or SKU }
+  /products/manage:
+    get:
+      tags: [Products]
+      summary: Management list including drafts and archived products (products.read)
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200": { description: Admin products list }
+  /products/manage/{id}:
+    get:
+      tags: [Products]
+      summary: Get full product details by ID for management (products.read)
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Admin product details }
+  /products/{slug}:
+    get:
+      tags: [Products]
+      summary: Public product detail by slug (active only)
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Product details }
+        "404": { description: Not found or not active }
+  /products/{id}:
+    patch:
+      tags: [Products]
+      summary: Update product fields or publication status (products.update)
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Product updated }
+    delete:
+      tags: [Products]
+      summary: Archive product and its variants non-destructively (products.delete)
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Product archived }
+  /products/{id}/variants:
+    post:
+      tags: [Products]
+      summary: Add a variant to a product (products.update)
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "201": { description: Variant created and inventory initialized at 0 }
+        "409": { description: SKU already exists }
+  /products/{id}/images:
+    post:
+      tags: [Products]
+      summary: Upload a product image to Cloudinary (products.update)
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image: { type: string, format: binary }
+                alt: { type: string }
+                isPrimary: { type: boolean }
+      responses:
+        "201": { description: Image uploaded }
+        "503": { description: Cloudinary credentials not configured }
+  /products/{id}/images/{imageId}:
+    delete:
+      tags: [Products]
+      summary: Delete an image owned by this product from Cloudinary and DB (products.update)
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: imageId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Image deleted }
+        "404": { description: Image not found on this product }
+
+  /variants/{id}:
+    patch:
+      tags: [Variants]
+      summary: Update variant SKU, weight, pricePaise, or active status (products.update)
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Variant updated }
+    delete:
+      tags: [Variants]
+      summary: Archive variant non-destructively (products.delete)
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Variant archived }
+
+  /inventory:
+    get:
+      tags: [Inventory]
+      summary: List variant inventory levels (inventory.read)
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: search, in: query, schema: { type: string } }
+        - { name: lowStockOnly, in: query, schema: { type: boolean } }
+        - { name: page, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: Paginated inventory list }
+  /inventory/low-stock:
+    get:
+      tags: [Inventory]
+      summary: List variants at or below low-stock threshold (inventory.read)
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200": { description: Low-stock inventory list }
+  /inventory/transactions:
+    get:
+      tags: [Inventory]
+      summary: List stock movement history (inventory.read)
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: variantId, in: query, schema: { type: string } }
+        - { name: type, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: Paginated stock transactions }
+  /inventory/{variantId}:
+    get:
+      tags: [Inventory]
+      summary: Get single variant inventory and recent movements (inventory.read)
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: variantId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Variant inventory and recent transactions }
+  /inventory/{variantId}/adjust:
+    patch:
+      tags: [Inventory]
+      summary: Adjust variant stock atomically with required reason and optional Idempotency-Key (inventory.adjust)
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: variantId, in: path, required: true, schema: { type: string } }
+        - { name: Idempotency-Key, in: header, required: false, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, quantityDelta, reason]
+              properties:
+                type:
+                  type: string
+                  enum: [initial_stock, stock_received, manual_adjustment, damaged, expired, return]
+                quantityDelta: { type: integer }
+                reason: { type: string }
+                reference: { type: string }
+                idempotencyKey: { type: string }
+      responses:
+        "200": { description: Stock adjusted (or replayed idempotently) }
+        "400": { description: Invalid delta or negative available stock }
+        "409": { description: Idempotency-Key parameter mismatch }
+  /inventory/{variantId}/threshold:
+    patch:
+      tags: [Inventory]
+      summary: Update low-stock alert threshold for a variant (inventory.adjust)
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - { name: variantId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lowStockThreshold]
+              properties:
+                lowStockThreshold: { type: integer, minimum: 0 }
+      responses:
+        "200": { description: Threshold updated }
