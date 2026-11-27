@@ -1,0 +1,1846 @@
+{
+  "info": {
+    "_postman_id": "3jata-backend-foundation-collection",
+    "name": "3JATA Organic Powder API (Backend Foundation)",
+    "description": "Complete Backend Foundation collection covering Health, Authentication, RBAC & Staff, Categories/Products/Variants/Images, Inventory, and Negative/Security tests. Uses Postman Cookie Jar (3jata_sid + 3jata_csrf) and X-CSRF-Token header.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01. Health",
+      "item": [
+        {
+          "name": "Health Check (Liveness + DB State)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Public liveness check reporting server uptime and Mongoose connection state."
+          }
+        },
+        {
+          "name": "Readiness Check (Strict DB Connected)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            },
+            "description": "Returns 200 when MongoDB is connected, or 503 Service Unavailable if disconnected."
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. Customer Authentication",
+      "item": [
+        {
+          "name": "Register Customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Public customer registration. Save verification token from newest file in backend/tmp/local-emails/ into {{verificationToken}}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Asha Sharma\",\n  \"email\": \"asha.customer@example.com\",\n  \"password\": \"Password123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.data && json.data.user) pm.environment.set(\"customerId\", json.data.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify-email",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "verify-email"
+              ]
+            },
+            "description": "Consumes single-use verification token copied from local email preview.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{verificationToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Resend Verification Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/resend-verification",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "resend-verification"
+              ]
+            },
+            "description": "Resends verification email (returns uniform 200 message to prevent account enumeration).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"asha.customer@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Login (Customer)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Logs in customer, sets HttpOnly 3jata_sid cookie and captures {{csrfToken}}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"asha.customer@example.com\",\n  \"password\": \"Password123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.data && json.data.csrfToken) {",
+                  "    pm.environment.set(\"csrfToken\", json.data.csrfToken);",
+                  "  }",
+                  "  if (json.data && json.data.user && json.data.user.userType === \"customer\") {",
+                  "    pm.environment.set(\"customerId\", json.data.user.id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Current Authenticated User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Returns authenticated user profile and permissions using active session cookie."
+          }
+        },
+        {
+          "name": "Get Session CSRF Token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/csrf-token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "csrf-token"
+              ]
+            },
+            "description": "Returns CSRF token bound to the current active session."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.data && json.data.csrfToken) pm.environment.set(\"csrfToken\", json.data.csrfToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Change Password (Revokes All Sessions)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/change-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "change-password"
+              ]
+            },
+            "description": "Changes password for authenticated user and revokes all active sessions.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"Password123\",\n  \"newPassword\": \"NewPassword456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) pm.environment.set(\"csrfToken\", \"\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/forgot-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "forgot-password"
+              ]
+            },
+            "description": "Requests password reset email (anti-enumeration 200). Copy token from backend/tmp/local-emails/ into {{resetToken}}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"asha.customer@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "reset-password"
+              ]
+            },
+            "description": "Resets password using single-use {{resetToken}} and revokes all active sessions.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{resetToken}}\",\n  \"newPassword\": \"Password123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Revokes current session in MongoDB and clears cookies."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) pm.environment.set(\"csrfToken\", \"\");"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03. Owner & Staff Administration",
+      "item": [
+        {
+          "name": "Login (Owner / Super Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Log in with the local owner account created via `npm run bootstrap:owner`. Enter your local password before sending.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"owner@3jata.local\",\n  \"password\": \"REPLACE_WITH_LOCAL_OWNER_PASSWORD\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.data && json.data.csrfToken) {",
+                  "    pm.environment.set(\"csrfToken\", json.data.csrfToken);",
+                  "  }",
+                  "  if (json.data && json.data.user && json.data.user.userType === \"customer\") {",
+                  "    pm.environment.set(\"customerId\", json.data.user.id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Roles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "roles"
+              ]
+            },
+            "description": "Lists all active roles and their assigned permissions (requires roles.read). Captures product_manager ID into {{roleId}}."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const roles = pm.response.json().data.roles || [];",
+                  "  const pmRole = roles.find(r => r.slug === \"product_manager\");",
+                  "  if (pmRole) pm.environment.set(\"roleId\", pmRole.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Permissions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/permissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "permissions"
+              ]
+            },
+            "description": "Lists all system permissions (requires roles.read)."
+          }
+        },
+        {
+          "name": "Provision Staff Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/staff",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "staff"
+              ]
+            },
+            "description": "Owner provisions a new staff user (requires staff.create). Captures {{staffId}}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Priya Product Manager\",\n  \"email\": \"priya.pm@3jata.local\",\n  \"password\": \"StaffPassword123\",\n  \"roleSlug\": \"product_manager\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const staff = pm.response.json().data.staff;",
+                  "  if (staff) pm.environment.set(\"staffId\", staff.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Staff Accounts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/staff?status=active&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "staff"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "active"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Paginated staff listing (requires staff.read)."
+          }
+        },
+        {
+          "name": "Get Staff Account by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/staff/{{staffId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "staff",
+                "{{staffId}}"
+              ]
+            },
+            "description": "Fetches one staff account by {{staffId}} (requires staff.read)."
+          }
+        },
+        {
+          "name": "Update Staff Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/staff/{{staffId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "staff",
+                "{{staffId}}"
+              ]
+            },
+            "description": "Updates staff name (requires staff.update).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Priya Senior Product Manager\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Assign Staff Role (Revokes Target Sessions)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/staff/{{staffId}}/role",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "staff",
+                "{{staffId}}",
+                "role"
+              ]
+            },
+            "description": "Reassigns staff role (requires roles.manage). Revokes target staff sessions.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleSlug\": \"inventory_manager\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Suspend Staff Account",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/staff/{{staffId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "staff",
+                "{{staffId}}",
+                "status"
+              ]
+            },
+            "description": "Suspends staff user and revokes sessions (requires staff.update).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"suspended\",\n  \"reason\": \"Temporary testing suspension\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Reactivate Staff Account",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/staff/{{staffId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "staff",
+                "{{staffId}}",
+                "status"
+              ]
+            },
+            "description": "Reactivates suspended staff user (requires staff.update).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/audit-logs?page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "audit-logs"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Paginated immutable audit trail (requires audit_logs.read)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "04. Categories & Catalogue Management",
+      "item": [
+        {
+          "name": "Create Root Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
+            },
+            "description": "Creates top-level category (requires categories.create). Captures {{categoryId}}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Vegetable Powders\",\n  \"description\": \"Sun-dried and cold-milled organic vegetable powders\",\n  \"displayOrder\": 1,\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const cat = pm.response.json().data.category;",
+                  "  if (cat) pm.environment.set(\"categoryId\", cat.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Subcategory",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
+            },
+            "description": "Creates subcategory under {{categoryId}}. Captures {{subcategoryId}}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Root Vegetable Powders\",\n  \"description\": \"Beetroot, carrot, and sweet potato powders\",\n  \"parent\": \"{{categoryId}}\",\n  \"displayOrder\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const cat = pm.response.json().data.category;",
+                  "  if (cat) pm.environment.set(\"subcategoryId\", cat.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Categories (Management)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/categories/manage?includeArchived=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "manage"
+              ],
+              "query": [
+                {
+                  "key": "includeArchived",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Lists all categories including inactive/archived (requires categories.read)."
+          }
+        },
+        {
+          "name": "Update Category",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{subcategoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{subcategoryId}}"
+              ]
+            },
+            "description": "Updates subcategory fields (requires categories.update).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Nutrient-rich root powders\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create Product with Variants",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ]
+            },
+            "description": "Creates active product with integer-paise variants (requires products.create). Captures {{productId}} and {{variantId}}.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Organic Beetroot Powder\",\n  \"shortDescription\": \"100% pure shade-dried beetroot powder for smoothies and cooking\",\n  \"description\": \"Made from farm-fresh organic red beetroots, shade-dried at low temperature and stone-milled to preserve natural nitrates and betalains.\",\n  \"category\": \"{{categoryId}}\",\n  \"subcategory\": \"{{subcategoryId}}\",\n  \"ingredients\": [\n    \"100% Organic Beetroot\"\n  ],\n  \"usageGuidance\": \"Mix 1 tsp in smoothies, juices, curd, or rotis.\",\n  \"origin\": \"Erode, Tamil Nadu\",\n  \"processingMethod\": \"Shade-dried and cold-milled\",\n  \"nutrition\": {\n    \"servingSize\": \"5g (1 tsp)\",\n    \"energyKcal\": 18,\n    \"proteinGrams\": 0.7,\n    \"carbsGrams\": 4.1,\n    \"fiberGrams\": 1.2,\n    \"fatGrams\": 0.1,\n    \"highlights\": [\n      \"No added sugar\",\n      \"Zero preservatives\"\n    ]\n  },\n  \"storageInstructions\": \"Store in a cool, dry place inside an airtight container.\",\n  \"shelfLife\": \"12 months from packaging\",\n  \"tags\": [\n    \"smoothie\",\n    \"pre-workout\",\n    \"vegan\"\n  ],\n  \"status\": \"active\",\n  \"isFeatured\": true,\n  \"isBestseller\": true,\n  \"seo\": {\n    \"title\": \"Buy Organic Beetroot Powder Online | 3JATA\",\n    \"description\": \"Pure stone-milled organic beetroot powder in 100g and 250g packs.\",\n    \"keywords\": [\n      \"beetroot powder\",\n      \"organic powder\"\n    ]\n  },\n  \"internalNotes\": \"Batch #2026-11 approved by QA\",\n  \"variants\": [\n    {\n      \"sku\": \"3J-BEET-100G\",\n      \"label\": \"100g Pouch\",\n      \"weightValue\": 100,\n      \"weightUnit\": \"g\",\n      \"pricePaise\": 14900,\n      \"mrpPaise\": 17900\n    },\n    {\n      \"sku\": \"3J-BEET-250G\",\n      \"label\": \"250g Pouch\",\n      \"weightValue\": 250,\n      \"weightUnit\": \"g\",\n      \"pricePaise\": 29900,\n      \"mrpPaise\": 34900\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const p = pm.response.json().data.product;",
+                  "  if (p) pm.environment.set(\"productId\", p.id);",
+                  "  if (p && p.variants && p.variants.length > 0) {",
+                  "    pm.environment.set(\"variantId\", p.variants[0].id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Products (Management)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/manage?page=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "manage"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                }
+              ]
+            },
+            "description": "Lists drafts, active, and archived products including internalNotes (requires products.read)."
+          }
+        },
+        {
+          "name": "Get Product by ID (Management)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/manage/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "manage",
+                "{{productId}}"
+              ]
+            },
+            "description": "Fetches full admin product view (requires products.read)."
+          }
+        },
+        {
+          "name": "Update Product",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "{{productId}}"
+              ]
+            },
+            "description": "Updates product metadata/status (requires products.update).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isFeatured\": true,\n  \"shelfLife\": \"12 months unopened\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Add Variant to Product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/variants",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "{{productId}}",
+                "variants"
+              ]
+            },
+            "description": "Adds a 500g variant and initializes its Inventory at 0 (requires products.update).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"3J-BEET-500G\",\n  \"label\": \"500g Family Pack\",\n  \"weightValue\": 500,\n  \"weightUnit\": \"g\",\n  \"pricePaise\": 54900,\n  \"mrpPaise\": 64900\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update Variant Price",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/variants/{{variantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "variants",
+                "{{variantId}}"
+              ]
+            },
+            "description": "Updates variant pricePaise/SKU/weight (requires products.update).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pricePaise\": 15900\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Upload Product Image (Cloudinary)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/images",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "{{productId}}",
+                "images"
+              ]
+            },
+            "description": "Uploads JPEG/PNG/WebP (max 2MB) to Cloudinary (requires products.update). Requires CLOUDINARY_* env vars. Captures {{imageId}}.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": ""
+                },
+                {
+                  "key": "alt",
+                  "value": "Organic Beetroot Powder 100g Pouch",
+                  "type": "text"
+                },
+                {
+                  "key": "isPrimary",
+                  "value": "true",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const img = pm.response.json().data.image;",
+                  "  if (img) pm.environment.set(\"imageId\", img.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Product Image (Cloudinary + Ownership Check)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}/images/{{imageId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "{{productId}}",
+                "images",
+                "{{imageId}}"
+              ]
+            },
+            "description": "Deletes image owned by {{productId}} from Cloudinary and MongoDB."
+          }
+        }
+      ]
+    },
+    {
+      "name": "05. Inventory Management",
+      "item": [
+        {
+          "name": "Get Variant Inventory",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/inventory/{{variantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory",
+                "{{variantId}}"
+              ]
+            },
+            "description": "Fetches current stock and last 10 movements for {{variantId}} (requires inventory.read)."
+          }
+        },
+        {
+          "name": "Adjust Stock (Initial Stock with Idempotency-Key)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "init-beet-100g-001"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/inventory/{{variantId}}/adjust",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory",
+                "{{variantId}}",
+                "adjust"
+              ]
+            },
+            "description": "Adds starting stock inside MongoDB transaction with required reason.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"initial_stock\",\n  \"quantityDelta\": 25,\n  \"reason\": \"Initial warehouse stock count\",\n  \"reference\": \"GRN-2026-001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Adjust Stock (Damaged Deduction)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/inventory/{{variantId}}/adjust",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory",
+                "{{variantId}}",
+                "adjust"
+              ]
+            },
+            "description": "Records damaged stock deduction with negative quantityDelta.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"damaged\",\n  \"quantityDelta\": -3,\n  \"reason\": \"3 pouches damaged during storage inspection\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update Low-Stock Threshold",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/inventory/{{variantId}}/threshold",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory",
+                "{{variantId}}",
+                "threshold"
+              ]
+            },
+            "description": "Sets low-stock threshold for {{variantId}} (requires inventory.adjust).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lowStockThreshold\": 25\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List All Inventory",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/inventory?page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Lists all variant stock records (requires inventory.read)."
+          }
+        },
+        {
+          "name": "List Low-Stock Variants",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/inventory/low-stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory",
+                "low-stock"
+              ]
+            },
+            "description": "Lists variants where availableQuantity <= lowStockThreshold (requires inventory.read)."
+          }
+        },
+        {
+          "name": "List Stock Movement History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/inventory/transactions?variantId={{variantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory",
+                "transactions"
+              ],
+              "query": [
+                {
+                  "key": "variantId",
+                  "value": "{{variantId}}"
+                }
+              ]
+            },
+            "description": "Lists immutable stock transactions with actor and timestamps (requires inventory.read)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "06. Public Storefront Catalogue",
+      "item": [
+        {
+          "name": "List Public Categories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/categories?page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Public active categories only."
+          }
+        },
+        {
+          "name": "Get Public Category by Slug",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/categories/vegetable-powders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "vegetable-powders"
+              ]
+            },
+            "description": "Public category details + active subcategories."
+          }
+        },
+        {
+          "name": "List Public Products (Search, Filter, Sort)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products?search=beetroot&inStock=true&sort=price_asc&page=1&limit=12",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "beetroot"
+                },
+                {
+                  "key": "inStock",
+                  "value": "true"
+                },
+                {
+                  "key": "sort",
+                  "value": "price_asc"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "12"
+                }
+              ]
+            },
+            "description": "Public active products only with variant availability."
+          }
+        },
+        {
+          "name": "Get Public Product by Slug",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products/organic-beetroot-powder",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "organic-beetroot-powder"
+              ]
+            },
+            "description": "Full public product details without internalNotes."
+          }
+        }
+      ]
+    },
+    {
+      "name": "07. Archival & Cleanup",
+      "item": [
+        {
+          "name": "Archive Variant",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/variants/{{variantId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "variants",
+                "{{variantId}}"
+              ]
+            },
+            "description": "Non-destructively archives {{variantId}} (requires products.delete)."
+          }
+        },
+        {
+          "name": "Archive Product",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "{{productId}}"
+              ]
+            },
+            "description": "Non-destructively archives {{productId}} and its variants (requires products.delete)."
+          }
+        },
+        {
+          "name": "Archive Subcategory",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{subcategoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{subcategoryId}}"
+              ]
+            },
+            "description": "Non-destructively archives {{subcategoryId}} after products are archived (requires categories.delete)."
+          }
+        },
+        {
+          "name": "Archive Root Category",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories/{{categoryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories",
+                "{{categoryId}}"
+              ]
+            },
+            "description": "Non-destructively archives {{categoryId}} after children/products are archived."
+          }
+        }
+      ]
+    },
+    {
+      "name": "08. Negative & Security Tests",
+      "item": [
+        {
+          "name": "NEG: Public Registration with Privileged Role (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Verifies public registration rejects role/isEmailVerified escalation fields.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Hacker\",\n  \"email\": \"hacker@example.com\",\n  \"password\": \"Password123\",\n  \"role\": \"super_admin\",\n  \"isEmailVerified\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "NEG: Unauthenticated /auth/me (401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Run after logout or clearing cookies; expects 401 Unauthorized."
+          }
+        },
+        {
+          "name": "NEG: Customer Accessing /admin/roles (403)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "roles"
+              ]
+            },
+            "description": "Run while logged in as customer; expects 403 Forbidden."
+          }
+        },
+        {
+          "name": "NEG: Product Update Attempting Stock Modification (400)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "products",
+                "{{productId}}"
+              ]
+            },
+            "description": "Run while logged in as owner/PM; expects 400 rejecting forbidden stock field.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stock\": 999\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "NEG: Inventory Adjustment Resulting in Negative Stock (400)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/inventory/{{variantId}}/adjust",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory",
+                "{{variantId}}",
+                "adjust"
+              ]
+            },
+            "description": "Run while logged in as owner/Inventory Manager; expects 400 rejecting negative stock.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"damaged\",\n  \"quantityDelta\": -99999,\n  \"reason\": \"Negative stock test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "NEG: Idempotency-Key Mismatch (409)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "init-beet-100g-001"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/inventory/{{variantId}}/adjust",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "inventory",
+                "{{variantId}}",
+                "adjust"
+              ]
+            },
+            "description": "Reuses previous Idempotency-Key with different quantityDelta; expects 409 Conflict.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"stock_received\",\n  \"quantityDelta\": 999,\n  \"reason\": \"Conflicting replay\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
